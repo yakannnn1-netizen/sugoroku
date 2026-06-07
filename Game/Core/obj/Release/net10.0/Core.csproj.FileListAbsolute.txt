@@ -1,0 +1,11 @@
+d:\github\sugoroku\Game\Core\bin\Release\net10.0\Core.deps.json
+d:\github\sugoroku\Game\Core\bin\Release\net10.0\Core.dll
+d:\github\sugoroku\Game\Core\bin\Release\net10.0\Core.pdb
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\Core.GeneratedMSBuildEditorConfig.editorconfig
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\Core.AssemblyInfoInputs.cache
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\Core.AssemblyInfo.cs
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\Core.csproj.CoreCompileInputs.cache
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\Core.dll
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\refint\Core.dll
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\Core.pdb
+d:\github\sugoroku\Game\Core\obj\Release\net10.0\ref\Core.dll
