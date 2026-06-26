@@ -17,7 +17,7 @@ gameManager.AddPlayer(player1);
 gameManager.AddPlayer(player2);
 
 // 3. 【最重要】分岐点でのルート選択処理（UIの実装）をManagerに渡す
-gameManager.OnRouteSelectionRequested = (player, availableSquares) =>
+gameManager.OnRouteSelectionRequested = async (player, availableSquares) =>
 {
     Console.WriteLine($"\n【分岐点】 {player.Name}さん、進むルートを選択してください。");
     
@@ -31,7 +31,7 @@ gameManager.OnRouteSelectionRequested = (player, availableSquares) =>
     while (true)
     {
         Console.Write("番号を入力: ");
-        string input = Console.ReadLine();
+        string input = await System.Threading.Tasks.Task.Run(() => Console.ReadLine());
         
         if (int.TryParse(input, out int choice) && choice >= 1 && choice <= availableSquares.Count)
         {
@@ -47,7 +47,7 @@ foreach (var square in board.AllSquares)
     if (square is PropertySquare propertySquare)
     {
         // 未所有の土地に止まった時のUI
-        propertySquare.OnPurchaseRequested = (player, prop) =>
+        propertySquare.OnPurchaseRequested = async (player, prop) =>
         {
             Console.WriteLine($"\n【土地獲得】 空き地『{prop.Name}』に到着しました。(価格: {prop.BaseValue}クリスタル)");
             
@@ -69,7 +69,7 @@ foreach (var square in board.AllSquares)
             }
 
             Console.Write("選択: ");
-            if (int.TryParse(Console.ReadLine(), out int choice) && choice > 0 && choice <= player.Inventory.Summons.Count)
+            if (int.TryParse(await System.Threading.Tasks.Task.Run(() => Console.ReadLine()), out int choice) && choice > 0 && choice <= player.Inventory.Summons.Count)
             {
                 var targetSummon = player.Inventory.Summons[choice - 1];
                 
@@ -92,7 +92,7 @@ foreach (var square in board.AllSquares)
             }
         };
 
-        propertySquare.OnUpgradeRequested = (player, prop) =>
+        propertySquare.OnUpgradeRequested = async (player, prop) =>
         {
             int upgradeCost = prop.BaseValue * prop.Level;
             Console.WriteLine($"\n【自領地到着】 自分の領地『{prop.Name}』に到着しました。");
@@ -100,7 +100,7 @@ foreach (var square in board.AllSquares)
             Console.WriteLine($"あなたの所持クリスタル: {player.Crystal}");
             Console.Write("増資してレベルアップしますか？ (y/n): ");
 
-            var input = Console.ReadLine();
+            var input = await System.Threading.Tasks.Task.Run(() => Console.ReadLine());
             if (input?.ToLower() == "y")
             {
                 if (prop.TryUpgrade(player))
@@ -128,18 +128,19 @@ foreach (var square in board.AllSquares)
                 Console.WriteLine($"召喚獣 {prop.PlacedSummon.Name} が睨みを利かせている…！");
             }
             Console.WriteLine($"{amount} クリスタルを支払いました。(残りクリスタル: {player.Crystal})");
+            return System.Threading.Tasks.Task.CompletedTask;
         };
     }
     else if (square is ShopSquare shopSquare)
     {
-        shopSquare.OnShopEntered = (player, shop) =>
+        shopSquare.OnShopEntered = async (player, shop) =>
         {
             while (true)
             {
                 Console.WriteLine($"\n【ショップ】いらっしゃいませ！ (所持クリスタル: {player.Crystal})");
                 Console.WriteLine("1: 召喚獣を買う / 2: 魔法を買う / 0: 出る");
                 Console.Write("選択: ");
-                var shopInput = Console.ReadLine();
+                var shopInput = await System.Threading.Tasks.Task.Run(() => Console.ReadLine());
 
                 if (shopInput == "0")
                 {
@@ -150,7 +151,7 @@ foreach (var square in board.AllSquares)
                 {
                     // ... 召喚獣リストの表示処理 ...
                     Console.Write("購入する番号 (キャンセルは0): ");
-                    if (int.TryParse(Console.ReadLine(), out int choice) && choice > 0 && choice <= SummonCatalog.AllSummons.Count)
+                    if (int.TryParse(await System.Threading.Tasks.Task.Run(() => Console.ReadLine()), out int choice) && choice > 0 && choice <= SummonCatalog.AllSummons.Count)
                     {
                         var target = SummonCatalog.AllSummons[choice - 1];
                         
@@ -169,7 +170,7 @@ foreach (var square in board.AllSquares)
                 {
                     // ... 魔法リストの表示処理 ...
                     Console.Write("購入する番号 (キャンセルは0): ");
-                    if (int.TryParse(Console.ReadLine(), out int choice) && choice > 0 && choice <= MagicCatalog.AllMagics.Count)
+                    if (int.TryParse(await System.Threading.Tasks.Task.Run(() => Console.ReadLine()), out int choice) && choice > 0 && choice <= MagicCatalog.AllMagics.Count)
                     {
                         var target = MagicCatalog.AllMagics[choice - 1];
 
@@ -204,6 +205,7 @@ foreach (var square in board.AllSquares)
             }
 
             Console.WriteLine($"報酬として {amount} クリスタルを獲得！ (現在のクリスタル: {player.Crystal})");
+            return System.Threading.Tasks.Task.CompletedTask;
         };
     }
 }
@@ -244,26 +246,30 @@ while (!isGameOver)
 
     if (actionInput == "1")
     {
-        break; // ループを抜けて移動処理（サイコロ）へ進む
+        // ループを抜けて移動処理（サイコロ）へ進む
+        // サイコロを振る
+        int rollResult = dice.Roll();
+        Console.WriteLine($"サイコロの目: 【 {rollResult} 】");
+
+        // Core側に移動処理をお任せする（分岐があれば勝手に手順3の処理が呼ばれる）
+        await gameManager.MovePlayerAsync(currentPlayer, rollResult);
     }
     else if (actionInput == "2" && currentPlayer.CurrentSquare is ShopSquare currentShop)
     {
         // Core側の処理は使わず、初期化時に設定した同じショップUIをここで再利用して呼び出す
-        currentShop.OnShopEntered?.Invoke(currentPlayer, currentShop);
+        if (currentShop.OnShopEntered != null)
+        {
+            await currentShop.OnShopEntered(currentPlayer, currentShop);
+        }
+    }
+    else if (actionInput == "0")
+    {
+        break;
     }
     else
     {
         Console.WriteLine("正しい番号を入力してください。");
     }
-    var input = Console.ReadLine();
-    if (input == "0") break;
-
-    // サイコロを振る
-    int rollResult = dice.Roll();
-    Console.WriteLine($"サイコロの目: 【 {rollResult} 】");
-
-    // Core側に移動処理をお任せする（分岐があれば勝手に手順3の処理が呼ばれる）
-    gameManager.MovePlayer(currentPlayer, rollResult);
 
     // 今回は暫定的な勝利判定（チェックポイントをすべて回り、スタート地点にいるか等）
     // ※後ほど「クリスタルが一定以上」などの正式な勝利条件に書き換えます
