@@ -9,14 +9,16 @@ public class CheckpointSquare : Square
         CheckpointId = checkpointId;
     }
 
-    public override void OnLanded(Player player)
+    public override System.Threading.Tasks.Task OnLandedAsync(Player player)
     {
         CheckIn(player);
+        return System.Threading.Tasks.Task.CompletedTask;
     }
 
-    public override void OnPassed(Player player)
+    public override System.Threading.Tasks.Task OnPassedAsync(Player player)
     {
         CheckIn(player);
+        return System.Threading.Tasks.Task.CompletedTask;
     }
 
     private void CheckIn(Player player)
