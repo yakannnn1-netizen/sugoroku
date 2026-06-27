@@ -9,8 +9,6 @@ public class Fire : Magic
     protected override string ExecuteEffect(Player caster, Player target)
     {
         int damage = 300;
-
-        // 払えるだけ払う（借金は一旦なし）
         int actualDamage = target.Crystal >= damage ? damage : target.Crystal;
         target.AddCrystal(-actualDamage);
 

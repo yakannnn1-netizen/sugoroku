@@ -16,107 +16,30 @@ var player2 = new Player("プレイヤー2", 1000);
 gameManager.AddPlayer(player1);
 gameManager.AddPlayer(player2);
 
-// 3. 【最重要】分岐点でのルート選択処理（UIの実装）をManagerに渡す
-gameManager.OnRouteSelectionRequested = async (player, availableSquares) =>
+// 3. 分岐点でのルート選択処理（オートプレイ）
+gameManager.OnRouteSelectionRequested = (player, availableSquares) =>
 {
-    Console.WriteLine($"\n【分岐点】 {player.Name}さん、進むルートを選択してください。");
-    
-    // 選択肢を表示
-    for (int i = 0; i < availableSquares.Count; i++)
-    {
-        Console.WriteLine($"{i + 1}: {availableSquares[i].Name}");
-    }
-
-    // 正しい入力がされるまでループ
-    while (true)
-    {
-        Console.Write("番号を入力: ");
-        string input = await System.Threading.Tasks.Task.Run(() => Console.ReadLine());
-        
-        if (int.TryParse(input, out int choice) && choice >= 1 && choice <= availableSquares.Count)
-        {
-            // 選ばれたマスをCore側（GameManager）に返す！
-            return availableSquares[choice - 1];
-        }
-        Console.WriteLine("正しい番号を入力してください。");
-    }
+    Console.WriteLine($"\n【分岐点】 {player.Name}さん、進むルートを選択してください。（オート選択: {availableSquares[0].Name}）");
+    return System.Threading.Tasks.Task.FromResult(availableSquares[0]);
 };
 
 foreach (var square in board.AllSquares)
 {
     if (square is PropertySquare propertySquare)
     {
-        // 未所有の土地に止まった時のUI
-        propertySquare.OnPurchaseRequested = async (player, prop) =>
+        // オートプレイ（今回は何もしない）
+        propertySquare.OnPurchaseRequested = (player, prop) =>
         {
             Console.WriteLine($"\n【土地獲得】 空き地『{prop.Name}』に到着しました。(価格: {prop.BaseValue}クリスタル)");
-            
-            // ★必須条件: インベントリに召喚獣がいるかチェック
-            if (player.Inventory.Summons.Count == 0)
-            {
-                Console.WriteLine("しかし、配置できる召喚獣を持っていないため、この土地は獲得できません！");
-                return; // 処理を終了して通過させる
-            }
-
-            Console.WriteLine($"あなたの所持クリスタル: {player.Crystal}");
-            Console.WriteLine("この土地を獲得するために配置する召喚獣を選んでください（キャンセルは0）:");
-            
-            // 所持している召喚獣をリストアップ
-            for (int i = 0; i < player.Inventory.Summons.Count; i++)
-            {
-                var s = player.Inventory.Summons[i];
-                Console.WriteLine($"{i + 1}: {s.Name} (徴収倍率: {s.TollMultiplier}倍)");
-            }
-
-            Console.Write("選択: ");
-            if (int.TryParse(await System.Threading.Tasks.Task.Run(() => Console.ReadLine()), out int choice) && choice > 0 && choice <= player.Inventory.Summons.Count)
-            {
-                var targetSummon = player.Inventory.Summons[choice - 1];
-                
-                // Core側の購入（設置）ロジックを呼び出す
-                if (prop.TryBuy(player, targetSummon))
-                {
-                    // 成功したらインベントリから消費する
-                    player.Inventory.RemoveSummon(targetSummon);
-                    Console.WriteLine($"{prop.Name} を購入し、{targetSummon.Name} を配置しました！");
-                    Console.WriteLine($"(残りクリスタル: {player.Crystal})");
-                }
-                else
-                {
-                    Console.WriteLine("クリスタルが足りません！");
-                }
-            }
-            else
-            {
-                Console.WriteLine("土地の獲得を見送りました。");
-            }
+            Console.WriteLine("オートプレイ中のため土地の獲得は見送ります。");
+            return System.Threading.Tasks.Task.CompletedTask;
         };
 
-        propertySquare.OnUpgradeRequested = async (player, prop) =>
+        propertySquare.OnUpgradeRequested = (player, prop) =>
         {
-            int upgradeCost = prop.BaseValue * prop.Level;
             Console.WriteLine($"\n【自領地到着】 自分の領地『{prop.Name}』に到着しました。");
-            Console.WriteLine($"現在のレベル: {prop.Level} / 次のレベルへの増資費用: {upgradeCost}クリスタル");
-            Console.WriteLine($"あなたの所持クリスタル: {player.Crystal}");
-            Console.Write("増資してレベルアップしますか？ (y/n): ");
-
-            var input = await System.Threading.Tasks.Task.Run(() => Console.ReadLine());
-            if (input?.ToLower() == "y")
-            {
-                if (prop.TryUpgrade(player))
-                {
-                    Console.WriteLine($"増資成功！ {prop.Name} が レベル{prop.Level} にアップグレードされました！");
-                    Console.WriteLine($"(残りクリスタル: {player.Crystal})");
-                }
-                else
-                {
-                    Console.WriteLine("クリスタルが足りません！今回はゆっくり休んでいきます。");
-                }
-            }
-            else
-            {
-                Console.WriteLine("今回は増資せず、ゆっくり休んでいきます。");
-            }
+            Console.WriteLine("オートプレイ中のため増資は見送ります。");
+            return System.Threading.Tasks.Task.CompletedTask;
         };
 
         // 他人の土地に止まり、通行料を支払った時のUI
@@ -133,59 +56,11 @@ foreach (var square in board.AllSquares)
     }
     else if (square is ShopSquare shopSquare)
     {
-        shopSquare.OnShopEntered = async (player, shop) =>
+        shopSquare.OnShopEntered = (player, shop) =>
         {
-            while (true)
-            {
-                Console.WriteLine($"\n【ショップ】いらっしゃいませ！ (所持クリスタル: {player.Crystal})");
-                Console.WriteLine("1: 召喚獣を買う / 2: 魔法を買う / 0: 出る");
-                Console.Write("選択: ");
-                var shopInput = await System.Threading.Tasks.Task.Run(() => Console.ReadLine());
-
-                if (shopInput == "0")
-                {
-                    Console.WriteLine("ショップを出ました。");
-                    break; // ループを抜けて盤面に戻る
-                }
-                else if (shopInput == "1")
-                {
-                    // ... 召喚獣リストの表示処理 ...
-                    Console.Write("購入する番号 (キャンセルは0): ");
-                    if (int.TryParse(await System.Threading.Tasks.Task.Run(() => Console.ReadLine()), out int choice) && choice > 0 && choice <= SummonCatalog.AllSummons.Count)
-                    {
-                        var target = SummonCatalog.AllSummons[choice - 1];
-                        
-                        // ★購入の判定自体は ShopSquare(Core側) に任せる！
-                        if (shop.TryBuySummon(player, target))
-                        {
-                            Console.WriteLine($"{target.Name} を購入し、インベントリに追加しました！");
-                        }
-                        else
-                        {
-                            Console.WriteLine("クリスタルが足りないか、所持枠がいっぱいです！");
-                        }
-                    }
-                }
-                else if (shopInput == "2")
-                {
-                    // ... 魔法リストの表示処理 ...
-                    Console.Write("購入する番号 (キャンセルは0): ");
-                    if (int.TryParse(await System.Threading.Tasks.Task.Run(() => Console.ReadLine()), out int choice) && choice > 0 && choice <= MagicCatalog.AllMagics.Count)
-                    {
-                        var target = MagicCatalog.AllMagics[choice - 1];
-
-                        // ★購入の判定自体は ShopSquare(Core側) に任せる！
-                        if (shop.TryBuyMagic(player, target))
-                        {
-                            Console.WriteLine($"{target.Name} を購入し、インベントリに追加しました！");
-                        }
-                        else
-                        {
-                            Console.WriteLine("クリスタルが足りないか、所持枠がいっぱいです！");
-                        }
-                    }
-                }
-            }
+            Console.WriteLine($"\n【ショップ】いらっしゃいませ！ (所持クリスタル: {player.Crystal})");
+            Console.WriteLine("オートプレイ中のため買い物をスキップします。");
+            return System.Threading.Tasks.Task.CompletedTask;
         };
     }
     else if (square is StartSquare startSquare)
@@ -210,14 +85,17 @@ foreach (var square in board.AllSquares)
     }
 }
 
-// 4. メインループ（ターン制の進行）
+// 4. メインループ（ターン制の進行・オートプレイ）
 bool isGameOver = false;
-while (!isGameOver)
+int turnCount = 0;
+int maxTurns = 20; // テスト用に20ターンで終了
+
+while (!isGameOver && turnCount < maxTurns)
 {
     var currentPlayer = gameManager.GetCurrentPlayer();
     
     Console.WriteLine($"\n========================================");
-    Console.WriteLine($"--- {currentPlayer.Name} のターン ---");
+    Console.WriteLine($"--- {currentPlayer.Name} のターン (Turn {turnCount+1}) ---");
     Console.WriteLine($"現在地: {currentPlayer.CurrentSquare.Name} / 所持クリスタル: {currentPlayer.Crystal}");
     Console.WriteLine($"========================================");
     
@@ -228,52 +106,19 @@ while (!isGameOver)
         Console.WriteLine($"{currentPlayer.Name} は眠っている...（1回休み）");
         currentPlayer.DecrementStatusEffects(); // ターンを消費
         gameManager.NextTurn();
+        turnCount++;
         continue; // 次の人のターンへスキップ
     }
     
-    Console.WriteLine("\nどうしますか？");
-    Console.WriteLine("1: サイコロを振る");
-    
-    // スタート地点（ShopSquare）にいる場合は買い物ができる
-    if (currentPlayer.CurrentSquare is ShopSquare shop)
-    {
-        Console.WriteLine("2: ショップを利用する");
-    }
-    Console.WriteLine("0: ゲーム終了");
+    // サイコロを振る
+    int rollResult = dice.Roll();
+    Console.WriteLine($"サイコロを振って 【 {rollResult} 】 が出た！");
 
-    Console.Write("選択: ");
-    var actionInput = Console.ReadLine();
-
-    if (actionInput == "1")
-    {
-        // ループを抜けて移動処理（サイコロ）へ進む
-        // サイコロを振る
-        int rollResult = dice.Roll();
-        Console.WriteLine($"サイコロの目: 【 {rollResult} 】");
-
-        // Core側に移動処理をお任せする（分岐があれば勝手に手順3の処理が呼ばれる）
-        await gameManager.MovePlayerAsync(currentPlayer, rollResult);
-    }
-    else if (actionInput == "2" && currentPlayer.CurrentSquare is ShopSquare currentShop)
-    {
-        // Core側の処理は使わず、初期化時に設定した同じショップUIをここで再利用して呼び出す
-        if (currentShop.OnShopEntered != null)
-        {
-            await currentShop.OnShopEntered(currentPlayer, currentShop);
-        }
-    }
-    else if (actionInput == "0")
-    {
-        break;
-    }
-    else
-    {
-        Console.WriteLine("正しい番号を入力してください。");
-    }
+    // Core側に移動処理をお任せする（非同期のTaskを待機）
+    await gameManager.MovePlayerAsync(currentPlayer, rollResult);
 
     // 今回は暫定的な勝利判定（チェックポイントをすべて回り、スタート地点にいるか等）
-    // ※後ほど「クリスタルが一定以上」などの正式な勝利条件に書き換えます
-    if (currentPlayer.CurrentSquare is StartSquare)
+    if (currentPlayer.CurrentSquare is StartSquare && currentPlayer.GetVisitedCheckpointCount() == 0 && turnCount > 5)
     {
         Console.WriteLine($"\n祝！ {currentPlayer.Name}がすべてのチェックポイントを回り帰還しました！");
         isGameOver = true;
@@ -282,6 +127,7 @@ while (!isGameOver)
 
     // 次の人へターンを回す
     gameManager.NextTurn();
+    turnCount++;
 }
 
 Console.WriteLine("ゲーム終了");
