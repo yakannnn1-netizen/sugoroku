@@ -6,6 +6,11 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Game.Core;
+using System.Drawing;
+using System.Drawing.Text;
+using System.Drawing.Drawing2D;
+using Color = Microsoft.Xna.Framework.Color;
+using Rectangle = Microsoft.Xna.Framework.Rectangle;
 
 namespace MonoGameUI;
 
@@ -142,6 +147,44 @@ public class Game1 : Microsoft.Xna.Framework.Game
         base.Update(gameTime);
     }
 
+    // System.Drawing.Common を使用して文字列から Texture2D を生成
+    private Texture2D CreateTextTexture(string text, int width, int height)
+    {
+        using (var bitmap = new Bitmap(width, height))
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(System.Drawing.Color.Transparent);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
+
+            using (var font = new Font("Arial", 14, FontStyle.Regular))
+            using (var brush = new SolidBrush(System.Drawing.Color.Black))
+            {
+                // テキストを中央寄せで描画するためのフォーマット設定
+                var format = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                graphics.DrawString(text, font, brush, new System.Drawing.RectangleF(0, 0, width, height), format);
+            }
+
+            // Bitmap を Texture2D に変換
+            var texture = new Texture2D(GraphicsDevice, width, height);
+            var data = new Color[width * height];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    data[y * width + x] = new Color(pixel.R, pixel.G, pixel.B, pixel.A);
+                }
+            }
+            texture.SetData(data);
+            return texture;
+        }
+    }
+
     protected override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(Color.CornflowerBlue);
@@ -193,6 +236,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Draw(_pixel, btn.Bounds, btn.Color);
             var innerBtnRect = new Rectangle(btn.Bounds.X + 2, btn.Bounds.Y + 2, btn.Bounds.Width - 4, btn.Bounds.Height - 4);
             _spriteBatch.Draw(_pixel, innerBtnRect, Color.White); // くりぬき
+
+            // テキストテクスチャがあれば描画
+            if (btn.TextTexture != null)
+            {
+                _spriteBatch.Draw(btn.TextTexture, btn.Bounds, Color.White);
+            }
         }
 
         _spriteBatch.End();
@@ -275,7 +324,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private async Task<int> ShowSelectionUIAsync(List<string> options)
     {
         _currentButtons.Clear();
-        int btnWidth = 150;
+        int btnWidth = 250; // テキストが収まるように広げる
         int btnHeight = 40;
         int startX = 10;
         int startY = 10;
@@ -283,7 +332,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         for (int i = 0; i < options.Count; i++)
         {
             var rect = new Rectangle(startX, startY + i * (btnHeight + 10), btnWidth, btnHeight);
-            _currentButtons.Add(new UIButton { Index = i, Bounds = rect, Color = Color.Black });
+            Texture2D textTex = CreateTextTexture(options[i], btnWidth, btnHeight);
+
+            _currentButtons.Add(new UIButton {
+                Index = i,
+                Bounds = rect,
+                Color = Color.Black,
+                Text = options[i],
+                TextTexture = textTex
+            });
             // Console.WriteLineに出力して、どのボタンが何のアクションかを知らせる
             Console.WriteLine($"Button {i}: {options[i]}");
         }
@@ -442,4 +499,6 @@ public struct UIButton
     public int Index;
     public Rectangle Bounds;
     public Color Color;
+    public string Text;
+    public Texture2D TextTexture;
 }
