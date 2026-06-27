@@ -22,6 +22,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // 白1ピクセルの動的テクスチャ（図形描画用）
     private Texture2D _pixel;
 
+    // プレイヤー用ダミー画像テクスチャ
+    private Texture2D _playerTexture;
+
     // Coreのオブジェクト
     private GameManager _gameManager;
     private Dice _dice;
@@ -115,6 +118,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // 1x1の白テクスチャを生成
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
+
+        // プレイヤー画像のロード
+        try
+        {
+            using (var stream = System.IO.File.OpenRead("player.png"))
+            {
+                _playerTexture = Texture2D.FromStream(GraphicsDevice, stream);
+            }
+        }
+        catch
+        {
+            Console.WriteLine("Warning: player.png not found. Using pixel texture for player.");
+            _playerTexture = _pixel;
+        }
     }
 
     protected override void Update(GameTime gameTime)
@@ -201,7 +218,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (square is StartSquare) sqColor = Color.Red;
             else if (square is CheckpointSquare) sqColor = Color.Green;
             else if (square is ShopSquare) sqColor = Color.Blue;
-            else if (square is PropertySquare p && p.Owner != null) sqColor = Color.Orange; // 誰かの土地
+            else if (square is PropertySquare p && p.Owner != null) sqColor = GetPlayerColor(p.Owner); // 誰かの土地
 
             // マス本体
             _spriteBatch.Draw(_pixel, rect, sqColor);
@@ -209,6 +226,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // 枠線っぽく見せるための一回り小さい矩形
             var innerRect = new Rectangle(rect.X + 2, rect.Y + 2, rect.Width - 4, rect.Height - 4);
             _spriteBatch.Draw(_pixel, innerRect, Color.DarkGray);
+
+            // 配置されている召喚獣の名前を描画する
+            if (square is PropertySquare prop && prop.PlacedSummon != null)
+            {
+                // テクスチャを毎フレーム生成するのは重いですが、簡易対応とします
+                Texture2D summonTex = CreateTextTexture(prop.PlacedSummon.Name, rect.Width + 20, 20);
+                var summonRect = new Rectangle(rect.X - 10, rect.Y - 25, rect.Width + 20, 20);
+                _spriteBatch.Draw(summonTex, summonRect, Color.White);
+                summonTex.Dispose();
+            }
         }
 
         // プレイヤーの描画
@@ -224,8 +251,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     int offsetX = (i == 0) ? -15 : 15;
                     int offsetY = (i == 0) ? -15 : 15;
                     var pRect = new Rectangle(sqRect.Center.X + offsetX - 10, sqRect.Center.Y + offsetY - 10, 20, 20);
-                    Color pColor = (i == 0) ? Color.Yellow : Color.Cyan;
-                    _spriteBatch.Draw(_pixel, pRect, pColor);
+                    _spriteBatch.Draw(_playerTexture, pRect, GetPlayerColor(player));
                 }
             }
         }
@@ -250,6 +276,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Window.Title = _currentMessage;
 
         base.Draw(gameTime);
+    }
+
+    private Color GetPlayerColor(Player player)
+    {
+        // プレイヤー１は緑、２は赤３は青４は黄色
+        if (player.Name == "プレイヤー1") return Color.Green;
+        if (player.Name == "プレイヤー2") return Color.Red;
+        if (player.Name == "プレイヤー3") return Color.Blue;
+        if (player.Name == "プレイヤー4") return Color.Yellow;
+        return Color.White;
     }
 
     // ==========================================
@@ -440,44 +476,60 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             else if (choice == 1) // 召喚獣
             {
-                var options = SummonCatalog.AllSummons.Select(s => $"{s.Name} ({s.Cost}C)").ToList();
-                options.Insert(0, "戻る");
-                SetMessage("どの召喚獣を買いますか？");
-                int buyChoice = await ShowSelectionUIAsync(options);
-
-                if (buyChoice > 0)
+                bool buyingSummons = true;
+                while (buyingSummons)
                 {
-                    var target = SummonCatalog.AllSummons[buyChoice - 1];
-                    if (shop.TryBuySummon(player, target))
+                    var options = SummonCatalog.AllSummons.Select(s => $"{s.Name} ({s.Cost}C)").ToList();
+                    options.Insert(0, "戻る");
+                    SetMessage($"どの召喚獣を買いますか？ (所持金:{player.Crystal}C)");
+                    int buyChoice = await ShowSelectionUIAsync(options);
+
+                    if (buyChoice == 0)
                     {
-                        SetMessage($"{target.Name} を購入しました！");
+                        buyingSummons = false; // 戻る
                     }
                     else
                     {
-                        SetMessage("クリスタル不足か、枠がいっぱいです。");
+                        var target = SummonCatalog.AllSummons[buyChoice - 1];
+                        if (shop.TryBuySummon(player, target))
+                        {
+                            SetMessage($"{target.Name} を購入しました！");
+                        }
+                        else
+                        {
+                            SetMessage("クリスタル不足か、枠がいっぱいです。");
+                        }
+                        await Task.Delay(1500);
                     }
-                    await Task.Delay(1500);
                 }
             }
             else if (choice == 2) // 魔法
             {
-                var options = MagicCatalog.AllMagics.Select(m => $"{m.Name} ({m.Cost}C)").ToList();
-                options.Insert(0, "戻る");
-                SetMessage("どの魔法を買いますか？");
-                int buyChoice = await ShowSelectionUIAsync(options);
-
-                if (buyChoice > 0)
+                bool buyingMagics = true;
+                while (buyingMagics)
                 {
-                    var target = MagicCatalog.AllMagics[buyChoice - 1];
-                    if (shop.TryBuyMagic(player, target))
+                    var options = MagicCatalog.AllMagics.Select(m => $"{m.Name} ({m.Cost}C)").ToList();
+                    options.Insert(0, "戻る");
+                    SetMessage($"どの魔法を買いますか？ (所持金:{player.Crystal}C)");
+                    int buyChoice = await ShowSelectionUIAsync(options);
+
+                    if (buyChoice == 0)
                     {
-                        SetMessage($"{target.Name} を購入しました！");
+                        buyingMagics = false; // 戻る
                     }
                     else
                     {
-                        SetMessage("クリスタル不足か、枠がいっぱいです。");
+                        var target = MagicCatalog.AllMagics[buyChoice - 1];
+                        if (shop.TryBuyMagic(player, target))
+                        {
+                            SetMessage($"{target.Name} を購入しました！");
+                        }
+                        else
+                        {
+                            SetMessage("クリスタル不足か、枠がいっぱいです。");
+                        }
+                        await Task.Delay(1500);
                     }
-                    await Task.Delay(1500);
                 }
             }
         }
