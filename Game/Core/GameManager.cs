@@ -11,7 +11,7 @@ public class GameManager
 
     // ★重要: UI側にルート選択を要求するための「デリゲート（関数の型）」を定義
     // 「プレイヤーと選択肢のリストを渡すから、選んだマスを返してね」という契約です
-    public delegate System.Threading.Tasks.Task<Square> RouteSelectionHandler(Player player, List<Square> availableSquares);
+    public delegate Square RouteSelectionHandler(Player player, List<Square> availableSquares);
     
     // UI側からここに実際の選択処理（メソッド）をセットしてもらいます
     public RouteSelectionHandler OnRouteSelectionRequested { get; set; }
@@ -40,7 +40,7 @@ public class GameManager
     }
 
     // プレイヤーを指定した歩数だけ進めるメインロジック
-    public async System.Threading.Tasks.Task MovePlayerAsync(Player player, int steps)
+    public void MovePlayer(Player player, int steps)
     {
         int remainingSteps = steps;
 
@@ -67,7 +67,7 @@ public class GameManager
                 }
 
                 // UI側で選ばれたマスを受け取って現在地を更新する
-                Square selectedSquare = await OnRouteSelectionRequested(player, nextSquares);
+                Square selectedSquare = OnRouteSelectionRequested(player, nextSquares);
                 player.CurrentSquare = selectedSquare;
             }
 
@@ -76,11 +76,11 @@ public class GameManager
             // まだ移動中（最後の一歩ではない）なら、通過処理を実行する
             if (remainingSteps > 0)
             {
-                await player.CurrentSquare.OnPassedAsync(player);
+                player.CurrentSquare.OnPassed(player);
             }
         }
 
         // 歩き終わったら、最終的に止まったマスのイベントを実行する
-        await player.CurrentSquare.OnLandedAsync(player);
+        player.CurrentSquare.OnLanded(player);
     }
 }

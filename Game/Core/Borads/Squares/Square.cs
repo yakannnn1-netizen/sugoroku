@@ -14,9 +14,6 @@ public abstract class Square
         Name = name;
     }
 
-    public abstract System.Threading.Tasks.Task OnLandedAsync(Player player);
-    public virtual System.Threading.Tasks.Task OnPassedAsync(Player player)
-    {
-        return System.Threading.Tasks.Task.CompletedTask;
-    }
+    public abstract void OnLanded(Player player);
+    public virtual void OnPassed(Player player) { }
 }

@@ -2,16 +2,13 @@ namespace Game.Core;
 
 public class ShopSquare : Square
 {
-    public Func<Player, ShopSquare, System.Threading.Tasks.Task> OnShopEntered { get; set; }
+    public Action<Player, ShopSquare> OnShopEntered { get; set; }
     public ShopSquare(string id, string name) : base(id, name) { }
 
-    public override async System.Threading.Tasks.Task OnLandedAsync(Player player)
+    public override void OnLanded(Player player)
     {
         // 買い物フェーズへの移行トリガーとして利用します
-        if (OnShopEntered != null)
-        {
-            await OnShopEntered(player, this);
-        }
+        OnShopEntered?.Invoke(player, this);
     }
 
     public bool TryBuySummon(Player player, Summon target)

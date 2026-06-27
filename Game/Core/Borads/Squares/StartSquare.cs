@@ -2,28 +2,25 @@ namespace Game.Core;
 
 public class StartSquare : ShopSquare
 {
-    public Func<Player, int, int, System.Threading.Tasks.Task> OnBonusAwarded { get; set; }
+    public Action<Player, int, int> OnBonusAwarded { get; set; }
 
     public StartSquare(string id, string name) : base(id, name) { }
 
-    public override async System.Threading.Tasks.Task OnLandedAsync(Player player)
+    public override void OnLanded(Player player)
     {
-        await CheckAndAwardBonus(player);
+        CheckAndAwardBonus(player);
         // 止まった時は親クラス(ShopSquare)の処理でショップが呼ばれる
-        await base.OnLandedAsync(player);
+        base.OnLanded(player);
     }
     
-    public override async System.Threading.Tasks.Task OnPassedAsync(Player player)
+    public override void OnPassed(Player player)
     {
-        await CheckAndAwardBonus(player);
+        CheckAndAwardBonus(player);
         // 通過時にもショップ機能を呼び出す
-        if (OnShopEntered != null)
-        {
-            await OnShopEntered(player, this);
-        }
+        OnShopEntered?.Invoke(player, this);
     }
 
-    private async System.Threading.Tasks.Task CheckAndAwardBonus(Player player)
+    private void CheckAndAwardBonus(Player player)
     {
         int count = player.GetVisitedCheckpointCount();
 
@@ -43,9 +40,6 @@ public class StartSquare : ShopSquare
         player.AddCrystal(bonusAmount);
         player.ResetCheckpoints(); // フラグをリセットして次の周回へ
         
-        if (OnBonusAwarded != null)
-        {
-            await OnBonusAwarded(player, bonusAmount, count);
-        }
+        OnBonusAwarded?.Invoke(player, bonusAmount, count);
     }
 }

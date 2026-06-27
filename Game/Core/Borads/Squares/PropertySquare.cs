@@ -7,9 +7,9 @@ public class PropertySquare : Square
     public Player Owner { get; private set; } // 所有者（nullなら未購入）
     public Summon PlacedSummon { get; private set; } // 配置された召喚獣
 
-    public Func<Player, PropertySquare, System.Threading.Tasks.Task> OnPurchaseRequested { get; set; }
-    public Func<Player, PropertySquare, int, System.Threading.Tasks.Task> OnTollPaid { get; set; }
-    public Func<Player, PropertySquare, System.Threading.Tasks.Task> OnUpgradeRequested { get; set; }
+    public Action<Player, PropertySquare> OnPurchaseRequested { get; set; }
+    public Action<Player, PropertySquare, int> OnTollPaid { get; set; }
+    public Action<Player, PropertySquare> OnUpgradeRequested { get; set; }
 
     public PropertySquare(string id, string name, int baseValue) : base(id, name)
     {
@@ -31,15 +31,12 @@ public class PropertySquare : Square
         return toll;
     }
 
-    public override async System.Threading.Tasks.Task OnLandedAsync(Player player)
+    public override void OnLanded(Player player)
     {
         if (Owner == null)
         {
             // パターン1: 未購入の土地
-            if (OnPurchaseRequested != null)
-            {
-                await OnPurchaseRequested(player, this);
-            }
+            OnPurchaseRequested?.Invoke(player, this);
         }
         else if (Owner != player)
         {
@@ -53,10 +50,7 @@ public class PropertySquare : Square
             Owner.AddCrystal(actualPayment);
 
             // UI側に「いくら払ったか」を通知する
-            if (OnTollPaid != null)
-            {
-                await OnTollPaid(player, this, actualPayment);
-            }
+            OnTollPaid?.Invoke(player, this, actualPayment);
 
             // 召喚獣が配置されていれば、特殊能力を発動！
             PlacedSummon?.OnEnemyLanded(player);
@@ -65,10 +59,7 @@ public class PropertySquare : Square
         {
             // パターン3: 自分の土地（増資や召喚獣の配置など。今回は一旦UI側に委譲しなくても良いようシンプルに維持）
             Console.WriteLine($"\nここは {player.Name} の領地だ。ゆっくり休んでいこう。");
-            if (OnUpgradeRequested != null)
-            {
-                await OnUpgradeRequested(player, this);
-            }
+            OnUpgradeRequested?.Invoke(player, this);
         }
     }
 
