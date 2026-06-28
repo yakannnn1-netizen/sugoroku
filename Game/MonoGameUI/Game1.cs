@@ -346,10 +346,41 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // 画面下部にログを描画する
         DrawMessageLog();
 
+        // 画面上部にプレイヤー情報を描画する
+        DrawPlayerHUD();
+
         // タイトルバーには基本的な情報を表示
         Window.Title = "Sugoroku Game (Chocobo Land Style)";
 
         base.Draw(gameTime);
+    }
+
+    private void DrawPlayerHUD()
+    {
+        var player = _gameManager.GetCurrentPlayer();
+        if (player == null) return;
+
+        _spriteBatch.Begin();
+
+        // HUDの背景パネルを描画
+        int panelHeight = 40;
+        int panelWidth = _graphics.PreferredBackBufferWidth;
+        var hudRect = new Rectangle(0, 0, panelWidth, panelHeight);
+        _spriteBatch.Draw(_pixel, hudRect, new Color(0, 0, 0, 200));
+
+        // プレイヤーの情報を文字列として構築
+        string infoText = $"{player.Name} | クリスタル: {player.Crystal}C | チェックポイント: {player.GetVisitedCheckpointCount()}/4";
+
+        // 状態異常があれば追記
+        if (player.SealTurns > 0) infoText += $" | 【封印】あと{player.SealTurns}T";
+        else if (player.SleepTurns > 0) infoText += " | 【睡眠】";
+
+        // テキストを描画
+        Texture2D textTex = GetTextTexture(infoText, panelWidth - 20, 30);
+        var rect = new Rectangle(10, 5, panelWidth - 20, 30);
+        _spriteBatch.Draw(textTex, rect, Color.White);
+
+        _spriteBatch.End();
     }
 
     private void DrawMessageLog()
@@ -548,10 +579,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 await Task.Delay(2000);
 
                 // 消費
-                if (!result.WasCountered) // 魔法自体は相殺されても消費される想定なら無条件で消すが、現状の仕様に従う
-                {
-                    player.Inventory.RemoveMagic(magicToCast);
-                }
+                // 使用した魔法は、相殺・無効化に関わらずインベントリから減らす
+                player.Inventory.RemoveMagic(magicToCast);
             }
         }
     }
