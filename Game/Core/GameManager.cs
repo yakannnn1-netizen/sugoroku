@@ -16,6 +16,9 @@ public class GameManager
     // UI側からここに実際の選択処理（メソッド）をセットしてもらいます
     public RouteSelectionHandler OnRouteSelectionRequested { get; set; }
 
+    // ★追加: 1マス移動ごとにUI側にアニメーション待機などをさせるためのイベント
+    public Func<Player, Square, System.Threading.Tasks.Task> OnPlayerMovingAsync { get; set; }
+
     public GameManager(Board board)
     {
         GameBoard = board;
@@ -69,6 +72,12 @@ public class GameManager
                 // UI側で選ばれたマスを受け取って現在地を更新する
                 Square selectedSquare = await OnRouteSelectionRequested(player, nextSquares);
                 player.CurrentSquare = selectedSquare;
+            }
+
+            // UI側に1マス進んだことを通知し、アニメーションなどの完了を待機する
+            if (OnPlayerMovingAsync != null)
+            {
+                await OnPlayerMovingAsync(player, player.CurrentSquare);
             }
 
             remainingSteps--;

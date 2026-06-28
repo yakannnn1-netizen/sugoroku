@@ -40,6 +40,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // マスの描画座標などを保持
     private Dictionary<Square, Rectangle> _squareRects = new Dictionary<Square, Rectangle>();
 
+    // プレイヤーの描画座標（スムーズ移動用）
+    private Dictionary<Player, Vector2> _playerPositions = new Dictionary<Player, Vector2>();
+
     // UI入力待機用
     private TaskCompletionSource<int> _uiSelectionTcs;
     private List<UIButton> _currentButtons = new List<UIButton>();
@@ -93,6 +96,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Coreのイベント紐付け
         _gameManager.OnRouteSelectionRequested = HandleRouteSelectionAsync;
+        _gameManager.OnPlayerMovingAsync = HandlePlayerMovingAsync;
+
         foreach (var square in board.AllSquares)
         {
             if (square is PropertySquare propertySquare)
@@ -117,9 +122,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _gameManager.AddPlayer(p1);
         _gameManager.AddPlayer(p2);
 
+        // 初期座標のセット
+        _playerPositions[p1] = GetSquareCenter(board.StartSquare);
+        _playerPositions[p2] = GetSquareCenter(board.StartSquare);
+
         // ゲームループ起動
         _isGameRunning = true;
         _ = GameLoopAsync();
+    }
+
+    private Vector2 GetSquareCenter(Square square)
+    {
+        if (_squareRects.TryGetValue(square, out var rect))
+        {
+            return new Vector2(rect.Center.X, rect.Center.Y);
+        }
+        return Vector2.Zero;
     }
 
     protected override void LoadContent()
@@ -318,11 +336,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             for (int i = 0; i < players.Count; i++)
             {
                 var player = players[i];
-                if (player.CurrentSquare != null && _squareRects.TryGetValue(player.CurrentSquare, out Rectangle sqRect))
+                if (_playerPositions.TryGetValue(player, out Vector2 pos))
                 {
                     int offsetX = (i == 0) ? -15 : 15;
                     int offsetY = (i == 0) ? -15 : 15;
-                    var pRect = new Rectangle(sqRect.Center.X + offsetX - 10, sqRect.Center.Y + offsetY - 10, 20, 20);
+                    var pRect = new Rectangle((int)pos.X + offsetX - 10, (int)pos.Y + offsetY - 10, 20, 20);
                     _spriteBatch.Draw(_playerTexture, pRect, GetPlayerColor(player));
                 }
             }
@@ -487,6 +505,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     SetMessage($"サイコロの目: 【 {roll} 】");
                     await Task.Delay(1000);
 
+                    // Manager側で1マス進むごとに HandlePlayerMovingAsync が呼ばれ、アニメーション待機が行われる
                     await _gameManager.MovePlayerAsync(player, roll);
 
                     if (player.CurrentSquare is StartSquare && player.GetVisitedCheckpointCount() == 0 && player.Crystal >= 3000)
@@ -545,6 +564,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _currentButtons.Clear();
         return selectedIndex;
+    }
+
+    // --- 1マス移動のアニメーション ---
+    private async Task HandlePlayerMovingAsync(Player player, Square targetSquare)
+    {
+        Vector2 startPos = _playerPositions[player];
+        Vector2 endPos = GetSquareCenter(targetSquare);
+
+        int frames = 15; // 1マス移動にかけるフレーム数(目安)
+        int delayPerFrame = 16; // 約60fps
+
+        for (int i = 1; i <= frames; i++)
+        {
+            float t = (float)i / frames;
+
+            // 跳ねるような動き (サイン波)
+            float hopY = (float)Math.Sin(t * Math.PI) * -30f;
+
+            Vector2 currentPos = Vector2.Lerp(startPos, endPos, t);
+            currentPos.Y += hopY;
+
+            _playerPositions[player] = currentPos;
+
+            await Task.Delay(delayPerFrame);
+        }
+
+        _playerPositions[player] = endPos;
     }
 
     // ==========================================
