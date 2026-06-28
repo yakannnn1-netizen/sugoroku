@@ -25,6 +25,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // プレイヤー用ダミー画像テクスチャ
     private Texture2D _playerTexture;
 
+    // 召喚獣用ダミー画像テクスチャ
+    private Texture2D _summonTexture;
+
     // Coreのオブジェクト
     private GameManager _gameManager;
     private Dice _dice;
@@ -119,18 +122,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
 
-        // プレイヤー画像のロード
+        // プレイヤーと召喚獣画像のロード
         try
         {
             using (var stream = System.IO.File.OpenRead("player.png"))
-            {
                 _playerTexture = Texture2D.FromStream(GraphicsDevice, stream);
-            }
         }
         catch
         {
-            Console.WriteLine("Warning: player.png not found. Using pixel texture for player.");
             _playerTexture = _pixel;
+        }
+
+        try
+        {
+            using (var stream = System.IO.File.OpenRead("summon.png"))
+                _summonTexture = Texture2D.FromStream(GraphicsDevice, stream);
+        }
+        catch
+        {
+            _summonTexture = _pixel;
         }
     }
 
@@ -164,7 +174,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         base.Update(gameTime);
     }
 
-    // System.Drawing.Common を使用して文字列から Texture2D を生成
+    // --- 文字テクスチャのキャッシュ ---
+    private Dictionary<string, Texture2D> _textCache = new Dictionary<string, Texture2D>();
+
+    private Texture2D GetTextTexture(string text, int width, int height)
+    {
+        string key = $"{text}_{width}_{height}";
+        if (_textCache.TryGetValue(key, out Texture2D tex)) return tex;
+
+        tex = CreateTextTexture(text, width, height);
+        _textCache[key] = tex;
+        return tex;
+    }
+
+    // System.Drawing.Common を使用して文字列から Texture2D を生成 (Premultiplied Alpha対応)
     private Texture2D CreateTextTexture(string text, int width, int height)
     {
         using (var bitmap = new Bitmap(width, height))
@@ -174,10 +197,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
 
-            using (var font = new Font("Arial", 14, FontStyle.Regular))
-            using (var brush = new SolidBrush(System.Drawing.Color.Black))
+            using (var font = new Font("Arial", 12, FontStyle.Bold))
+            using (var brush = new SolidBrush(System.Drawing.Color.White))
             {
-                // テキストを中央寄せで描画するためのフォーマット設定
                 var format = new StringFormat
                 {
                     Alignment = StringAlignment.Center,
@@ -186,7 +208,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 graphics.DrawString(text, font, brush, new System.Drawing.RectangleF(0, 0, width, height), format);
             }
 
-            // Bitmap を Texture2D に変換
             var texture = new Texture2D(GraphicsDevice, width, height);
             var data = new Color[width * height];
             for (int y = 0; y < height; y++)
@@ -194,7 +215,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 for (int x = 0; x < width; x++)
                 {
                     var pixel = bitmap.GetPixel(x, y);
-                    data[y * width + x] = new Color(pixel.R, pixel.G, pixel.B, pixel.A);
+                    // MonoGame (XNA) のデフォルトブレンドステートは Premultiplied Alpha を期待するため、RGBにAを掛ける
+                    float alpha = pixel.A / 255f;
+                    data[y * width + x] = new Color((int)(pixel.R * alpha), (int)(pixel.G * alpha), (int)(pixel.B * alpha), pixel.A);
                 }
             }
             texture.SetData(data);
@@ -220,21 +243,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (square is ShopSquare) sqColor = Color.Blue;
             else if (square is PropertySquare p && p.Owner != null) sqColor = GetPlayerColor(p.Owner); // 誰かの土地
 
-            // マス本体
-            _spriteBatch.Draw(_pixel, rect, sqColor);
-
-            // 枠線っぽく見せるための一回り小さい矩形
+            // 枠線を白くし、中をマスの色（またはグレー）にする反転
+            _spriteBatch.Draw(_pixel, rect, Color.White); // 外枠は白
             var innerRect = new Rectangle(rect.X + 2, rect.Y + 2, rect.Width - 4, rect.Height - 4);
-            _spriteBatch.Draw(_pixel, innerRect, Color.DarkGray);
+            _spriteBatch.Draw(_pixel, innerRect, sqColor); // 中身は色付き
 
-            // 配置されている召喚獣の名前を描画する
-            if (square is PropertySquare prop && prop.PlacedSummon != null)
+            // プロパティマスなら価格や徴収額を表示
+            if (square is PropertySquare prop)
             {
-                // テクスチャを毎フレーム生成するのは重いですが、簡易対応とします
-                Texture2D summonTex = CreateTextTexture(prop.PlacedSummon.Name, rect.Width + 20, 20);
-                var summonRect = new Rectangle(rect.X - 10, rect.Y - 25, rect.Width + 20, 20);
-                _spriteBatch.Draw(summonTex, summonRect, Color.White);
-                summonTex.Dispose();
+                string infoText = prop.Owner == null ? $"{prop.BaseValue}C" : $"Toll:{prop.CalculateToll()}";
+                Texture2D infoTex = GetTextTexture(infoText, rect.Width + 20, 20);
+                var infoRect = new Rectangle(rect.X - 10, rect.Y + rect.Height + 5, rect.Width + 20, 20);
+                _spriteBatch.Draw(infoTex, infoRect, Color.White);
+
+                // 配置されている召喚獣の描画
+                if (prop.PlacedSummon != null)
+                {
+                    // 召喚獣のダミー画像
+                    var summonImgRect = new Rectangle(rect.X + rect.Width / 2 - 10, rect.Y - 25, 20, 20);
+                    _spriteBatch.Draw(_summonTexture, summonImgRect, Color.White);
+
+                    // 召喚獣の名前
+                    Texture2D summonTex = GetTextTexture(prop.PlacedSummon.Name, rect.Width + 40, 20);
+                    var summonRect = new Rectangle(rect.X - 20, rect.Y - 45, rect.Width + 40, 20);
+                    _spriteBatch.Draw(summonTex, summonRect, Color.White);
+                }
             }
         }
 
@@ -259,11 +292,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // UI（ボタン）の描画
         foreach (var btn in _currentButtons)
         {
-            _spriteBatch.Draw(_pixel, btn.Bounds, btn.Color);
+            _spriteBatch.Draw(_pixel, btn.Bounds, Color.White); // 枠を白
             var innerBtnRect = new Rectangle(btn.Bounds.X + 2, btn.Bounds.Y + 2, btn.Bounds.Width - 4, btn.Bounds.Height - 4);
-            _spriteBatch.Draw(_pixel, innerBtnRect, Color.White); // くりぬき
+            _spriteBatch.Draw(_pixel, innerBtnRect, btn.Color); // 中を黒(または指定色)
 
-            // テキストテクスチャがあれば描画
             if (btn.TextTexture != null)
             {
                 _spriteBatch.Draw(btn.TextTexture, btn.Bounds, Color.White);
@@ -368,7 +400,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         for (int i = 0; i < options.Count; i++)
         {
             var rect = new Rectangle(startX, startY + i * (btnHeight + 10), btnWidth, btnHeight);
-            Texture2D textTex = CreateTextTexture(options[i], btnWidth, btnHeight);
+            Texture2D textTex = GetTextTexture(options[i], btnWidth, btnHeight);
 
             _currentButtons.Add(new UIButton {
                 Index = i,
