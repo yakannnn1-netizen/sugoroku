@@ -349,17 +349,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             bool turnActive = true;
+            bool actionTaken = false; // ループ内で移動アクションが行われたかを管理
+
             while (turnActive)
             {
-                SetMessage($"{player.Name} のターン: どうしますか？");
+                SetMessage($"{player.Name} のターン: どうしますか？ (Lap {player.LapCount + 1})");
 
-                var actionOptions = new List<string> { "サイコロを振る" };
-                if (player.CurrentSquare is ShopSquare) actionOptions.Add("ショップを利用");
+                var actionOptions = new List<string>();
+                actionOptions.Add("サイコロを振る");
 
-                int action = await ShowSelectionUIAsync(actionOptions);
-
-                if (action == 0) // サイコロ
+                // 魔法は2周目以降 (LapCount >= 1) にインベントリにあれば使える
+                bool canUseMagic = player.LapCount >= 1 && player.Inventory.Magics.Count > 0;
+                if (canUseMagic)
                 {
+                    actionOptions.Add("魔法を使う");
+                }
+
+                // 「ゲームスタート時 (LapCount == 0 最初の行動前)」のみショップを利用可能
+                bool isGameStart = player.LapCount == 0 && !actionTaken;
+                if (isGameStart)
+                {
+                    actionOptions.Add("ショップを利用");
+                }
+
+                int selectedIndex = await ShowSelectionUIAsync(actionOptions);
+                string selectedAction = actionOptions[selectedIndex];
+
+                if (selectedAction == "サイコロを振る")
+                {
+                    actionTaken = true;
                     int roll = _dice.Roll();
                     SetMessage($"サイコロの目: 【 {roll} 】");
                     await Task.Delay(1000);
@@ -375,12 +393,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                     turnActive = false;
                 }
-                else if (action == 1) // ショップ
+                else if (selectedAction == "ショップを利用")
                 {
                     if (player.CurrentSquare is ShopSquare shop)
                     {
                         await shop.OnShopEntered(player, shop);
                     }
+                }
+                else if (selectedAction == "魔法を使う")
+                {
+                    await HandleUseMagicAsync(player);
                 }
             }
 
@@ -418,6 +440,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _currentButtons.Clear();
         return selectedIndex;
+    }
+
+    // ==========================================
+    // カスタムUIイベントハンドラ
+    // ==========================================
+
+    private async Task HandleUseMagicAsync(Player player)
+    {
+        // 1. 魔法を選択
+        var magicOptions = player.Inventory.Magics.Select(m => m.Name).ToList();
+        magicOptions.Insert(0, "やめる");
+        SetMessage("どの魔法を使いますか？");
+        int magicChoice = await ShowSelectionUIAsync(magicOptions);
+
+        if (magicChoice > 0)
+        {
+            var magicToCast = player.Inventory.Magics[magicChoice - 1];
+
+            // 2. ターゲットを選択
+            var targetOptions = _gameManager.Players.Select(p => p.Name).ToList();
+            targetOptions.Insert(0, "やめる");
+            SetMessage("誰に対して使いますか？");
+            int targetChoice = await ShowSelectionUIAsync(targetOptions);
+
+            if (targetChoice > 0)
+            {
+                var targetPlayer = _gameManager.Players[targetChoice - 1];
+
+                // 3. 魔法の発動
+                var result = magicToCast.Cast(player, targetPlayer);
+                SetMessage(result.Message);
+                await Task.Delay(2000);
+
+                // 消費
+                if (!result.WasCountered) // 魔法自体は相殺されても消費される想定なら無条件で消すが、現状の仕様に従う
+                {
+                    player.Inventory.RemoveMagic(magicToCast);
+                }
+            }
+        }
     }
 
     // --- Core のイベントハンドラ ---

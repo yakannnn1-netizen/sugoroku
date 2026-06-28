@@ -8,6 +8,8 @@ public class StartSquare : ShopSquare
 
     public override async System.Threading.Tasks.Task OnLandedAsync(Player player)
     {
+        // スタート地点に止まったので周回数を増やす
+        player.LapCount++;
         await CheckAndAwardBonus(player);
         // 止まった時は親クラス(ShopSquare)の処理でショップが呼ばれる
         await base.OnLandedAsync(player);
@@ -15,6 +17,8 @@ public class StartSquare : ShopSquare
     
     public override async System.Threading.Tasks.Task OnPassedAsync(Player player)
     {
+        // スタート地点を通過したので周回数を増やす
+        player.LapCount++;
         await CheckAndAwardBonus(player);
         // 通過時にもショップ機能を呼び出す
         if (OnShopEntered != null)

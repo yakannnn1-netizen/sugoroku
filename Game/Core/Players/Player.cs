@@ -10,6 +10,7 @@ namespace Game.Core
         public bool IsStatusAffected => SleepTurns > 0 || SealTurns > 0;
         public Inventory Inventory { get; } = new Inventory();
         public Square CurrentSquare { get; set; }
+        public int LapCount { get; set; } = 0; // 何週目かを管理
 
         public Player(string name, int crystal)
         {
