@@ -28,6 +28,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // 召喚獣用ダミー画像テクスチャ
     private Texture2D _summonTexture;
 
+    // 特殊マス用ダミー画像テクスチャ
+    private Texture2D _startTexture;
+    private Texture2D _shopTexture;
+    private Texture2D _cpTexture;
+
     // Coreのオブジェクト
     private GameManager _gameManager;
     private Dice _dice;
@@ -38,7 +43,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // UI入力待機用
     private TaskCompletionSource<int> _uiSelectionTcs;
     private List<UIButton> _currentButtons = new List<UIButton>();
-    private string _currentMessage = "ゲーム起動中...";
+
+    // 画面下部に流れるメッセージログ用
+    private List<string> _messageLog = new List<string>();
+    private const int MaxLogLines = 5;
 
     // マウスの前の状態（クリックエッジ検出用）
     private MouseState _prevMouseState;
@@ -142,6 +150,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _summonTexture = _pixel;
         }
+
+        try
+        {
+            using (var stream = System.IO.File.OpenRead("start.png")) _startTexture = Texture2D.FromStream(GraphicsDevice, stream);
+        }
+        catch { _startTexture = _pixel; }
+
+        try
+        {
+            using (var stream = System.IO.File.OpenRead("shop.png")) _shopTexture = Texture2D.FromStream(GraphicsDevice, stream);
+        }
+        catch { _shopTexture = _pixel; }
+
+        try
+        {
+            using (var stream = System.IO.File.OpenRead("cp.png")) _cpTexture = Texture2D.FromStream(GraphicsDevice, stream);
+        }
+        catch { _cpTexture = _pixel; }
     }
 
     protected override void Update(GameTime gameTime)
@@ -237,16 +263,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var square = kvp.Key;
             var rect = kvp.Value;
 
-            Color sqColor = Color.LightGray;
-            if (square is StartSquare) sqColor = Color.Red;
-            else if (square is CheckpointSquare) sqColor = Color.Green;
-            else if (square is ShopSquare) sqColor = Color.Blue;
-            else if (square is PropertySquare p && p.Owner != null) sqColor = GetPlayerColor(p.Owner); // 誰かの土地
+            if (square is StartSquare)
+            {
+                _spriteBatch.Draw(_startTexture, rect, Color.White);
+            }
+            else if (square is CheckpointSquare)
+            {
+                _spriteBatch.Draw(_cpTexture, rect, Color.White);
+            }
+            else if (square is ShopSquare)
+            {
+                _spriteBatch.Draw(_shopTexture, rect, Color.White);
+            }
+            else
+            {
+                // PropertySquareなど通常の土地マス
+                Color sqColor = Color.LightGray;
+                if (square is PropertySquare p && p.Owner != null) sqColor = GetPlayerColor(p.Owner); // 誰かの土地
 
-            // 枠線を白くし、中をマスの色（またはグレー）にする反転
-            _spriteBatch.Draw(_pixel, rect, Color.White); // 外枠は白
-            var innerRect = new Rectangle(rect.X + 2, rect.Y + 2, rect.Width - 4, rect.Height - 4);
-            _spriteBatch.Draw(_pixel, innerRect, sqColor); // 中身は色付き
+                // 枠線を白くし、中をマスの色（またはグレー）にする反転
+                _spriteBatch.Draw(_pixel, rect, Color.White); // 外枠は白
+                var innerRect = new Rectangle(rect.X + 2, rect.Y + 2, rect.Width - 4, rect.Height - 4);
+                _spriteBatch.Draw(_pixel, innerRect, sqColor); // 中身は色付き
+            }
 
             // プロパティマスなら価格や徴収額を表示
             if (square is PropertySquare prop)
@@ -304,10 +343,38 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // タイトルバーにメッセージを表示（簡易的な文字表示の代替）
-        Window.Title = _currentMessage;
+        // 画面下部にログを描画する
+        DrawMessageLog();
+
+        // タイトルバーには基本的な情報を表示
+        Window.Title = "Sugoroku Game (Chocobo Land Style)";
 
         base.Draw(gameTime);
+    }
+
+    private void DrawMessageLog()
+    {
+        _spriteBatch.Begin();
+
+        // ログの背景パネルを描画
+        int panelHeight = 120;
+        int panelWidth = _graphics.PreferredBackBufferWidth;
+        int panelY = _graphics.PreferredBackBufferHeight - panelHeight;
+        var logRect = new Rectangle(0, panelY, panelWidth, panelHeight);
+
+        // 半透明の黒背景
+        _spriteBatch.Draw(_pixel, logRect, new Color(0, 0, 0, 150));
+
+        // テキストを描画
+        int lineHeight = 20;
+        for (int i = 0; i < _messageLog.Count; i++)
+        {
+            Texture2D textTex = GetTextTexture(_messageLog[i], panelWidth - 20, lineHeight);
+            var rect = new Rectangle(10, panelY + 10 + i * lineHeight, panelWidth - 20, lineHeight);
+            _spriteBatch.Draw(textTex, rect, Color.White);
+        }
+
+        _spriteBatch.End();
     }
 
     private Color GetPlayerColor(Player player)
@@ -326,7 +393,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void SetMessage(string message)
     {
-        _currentMessage = message;
+        _messageLog.Add(message);
+        if (_messageLog.Count > MaxLogLines)
+        {
+            _messageLog.RemoveAt(0); // 古いものを削除
+        }
         Console.WriteLine($"[Game] {message}");
     }
 
@@ -336,7 +407,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         while (!isGameOver)
         {
             var player = _gameManager.GetCurrentPlayer();
-            SetMessage($"=== {player.Name} のターン (所持金:{player.Crystal}) ===");
+            player.TurnCount++; // ターン数をカウントアップ
+
+            SetMessage($"=== {player.Name} のターン (所持金:{player.Crystal}C, {player.TurnCount}ターン目) ===");
             await Task.Delay(1000); // ターン開始時のウェイト
 
             if (player.SleepTurns > 0)
@@ -353,20 +426,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             while (turnActive)
             {
-                SetMessage($"{player.Name} のターン: どうしますか？ (Lap {player.LapCount + 1})");
+                SetMessage($"{player.Name} のターン: 行動を選択");
 
                 var actionOptions = new List<string>();
                 actionOptions.Add("サイコロを振る");
 
-                // 魔法は2周目以降 (LapCount >= 1) にインベントリにあれば使える
-                bool canUseMagic = player.LapCount >= 1 && player.Inventory.Magics.Count > 0;
+                // 魔法は2周目以降(TurnCount >= 2)にインベントリにあれば使える
+                bool canUseMagic = player.TurnCount >= 2 && player.Inventory.Magics.Count > 0;
                 if (canUseMagic)
                 {
                     actionOptions.Add("魔法を使う");
                 }
 
-                // 「ゲームスタート時 (LapCount == 0 最初の行動前)」のみショップを利用可能
-                bool isGameStart = player.LapCount == 0 && !actionTaken;
+                // 「ゲームスタート時 (TurnCount == 1 最初の行動前)」のみショップを利用可能
+                // ※2周目以降(TurnCount >= 2)はショップ・スタートマスから動くターンには購入不可
+                bool isGameStart = player.TurnCount == 1 && !actionTaken;
                 if (isGameStart)
                 {
                     actionOptions.Add("ショップを利用");

@@ -11,6 +11,7 @@ namespace Game.Core
         public Inventory Inventory { get; } = new Inventory();
         public Square CurrentSquare { get; set; }
         public int LapCount { get; set; } = 0; // 何週目かを管理
+        public int TurnCount { get; set; } = 0; // そのプレイヤーが何ターン目かを管理
 
         public Player(string name, int crystal)
         {
